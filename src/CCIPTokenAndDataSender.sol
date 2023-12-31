@@ -6,9 +6,12 @@ import {OwnerIsCreator} from "@chainlink/contracts-ccip/src/v0.8/shared/access/O
 import {IRouterClient} from "@chainlink/contracts-ccip/src/v0.8/ccip/interfaces/IRouterClient.sol";
 import {Client} from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client.sol";
 import {IERC20} from "@chainlink/contracts-ccip/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@chainlink/contracts-ccip/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/utils/SafeERC20.sol";
 import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/interfaces/LinkTokenInterface.sol";
 
 contract CCIPTokenAndDataSender is OwnerIsCreator {
+    using SafeERC20 for IERC20;
+
     IRouterClient immutable i_router;
     LinkTokenInterface immutable i_linkToken;
 
@@ -55,7 +58,14 @@ contract CCIPTokenAndDataSender is OwnerIsCreator {
         s_whitelistedChains[_destinationChainSelector] = false;
     }
 
-    // @notice The user should first send the tokens to this contract
+    /**
+     * @param _destinationChainSelector The chain selector of the destination chain.
+     * @param _receiver The address of the receiver on the destination chain.
+     * @param _token The token address that will be transferred.
+     * @param _amount The token amount that will be transferred.
+     * @notice The user should first approve the tokens _amount to this contract
+     * for safeTransferFrom to not revert due to insufficient allowance.
+     */
     function transferTokens(
         uint64 _destinationChainSelector,
         address _receiver,
@@ -91,6 +101,9 @@ contract CCIPTokenAndDataSender is OwnerIsCreator {
         }
 
         i_linkToken.approve(address(i_router), fees);
+
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
+
         IERC20(_token).approve(address(i_router), _amount);
 
         messageId = i_router.ccipSend(_destinationChainSelector, message);
